@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30114.105
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EPGPAnalyze", "EPGPAnalyze\EPGPAnalyze.csproj", "{83C367B4-16F0-49F1-AB8B-046F9F9ADEDE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{83C367B4-16F0-49F1-AB8B-046F9F9ADEDE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{83C367B4-16F0-49F1-AB8B-046F9F9ADEDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{83C367B4-16F0-49F1-AB8B-046F9F9ADEDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{83C367B4-16F0-49F1-AB8B-046F9F9ADEDE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {14EBD96C-FC96-4F64-9C30-FBA5B64B9510}
+	EndGlobalSection
+EndGlobal
