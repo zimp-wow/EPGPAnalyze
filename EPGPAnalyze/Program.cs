@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Management.Instrumentation;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -12,8 +13,15 @@ namespace EPGPAnalyze
     {
         const int MOLTEN_CORE_EP = 126;
         const int BWL_ONY_EP     = 169;
+        const int BASE_GP        = 50;
 
         private static Dictionary<string, Entry> _entries = new Dictionary<string, Entry>();
+        private static Mode _activeMode = Mode.Analyze;
+
+        private enum Mode {
+            Analyze = 0,
+            Report = 1
+        }
 
         static async Task Main(string[] args)
         {
@@ -91,16 +99,16 @@ namespace EPGPAnalyze
             }
 
             public void Analyze( Entry next ) {
-                int decayGP( int value, float percent = 0.1f, bool baseGP = true ) {
-                    if( baseGP ) {
-                        return value - (int)Math.Ceiling((value - 50) * percent);
+                int decay( int value, float percent = 0.1f, int baseVal = 0 ) {
+                    if( baseVal > 0 ) {
+                        return (int)Math.Max(Math.Floor( ( value - baseVal ) * ( 1.0f - percent ) + baseVal ), baseVal );
                     }
-                    return value - (int)Math.Ceiling(value * percent);
+                    return (int)Math.Max(Math.Floor(value * ( 1.0f - percent ) ), 0 );
                 }
 
-                int decayedEP = EP - (int)Math.Ceiling(EP * .1f);
-                int decayedGP = decayGP( GP );
-                int decayedGP2 = decayGP( GP, .1f, false );
+                int decayedEP = decay( EP );
+                int decayedGP = decay( GP, 0.1f, BASE_GP );
+                int decayedGP2 = decay( decayedGP, .1f, BASE_GP );
 
                 int potentialNextEP = decayedEP + BWL_ONY_EP + MOLTEN_CORE_EP;
                 bool missedRaid = false;
@@ -129,12 +137,25 @@ namespace EPGPAnalyze
                         tooLittleGP = true;
                     }
                 }
-                if( next.GP == decayedGP2 && next.GP != 50 ) {
+                if( next.GP == decayedGP2 && next.GP != BASE_GP ) {
                     doubleDecay = true;
                 }
 
-                if( tooMuchEP || tooLittleGP || doubleDecay ) {
-                    Console.WriteLine( $"{ Name } - Missed Raid: { missedRaid } - Got Loot: { gotLoot } - Too Much EP: { tooMuchEP } (Expected { potentialNextEP }, Got { next.EP }) - Too Little GP: { tooLittleGP } (Expected {decayedGP} (Double Decay: {decayedGP2}), Got {next.GP}) - Before: {EP}/{GP} - Decayed: {decayedEP}/{decayedGP} - After: {next.EP}/{next.GP}" );
+                if( _activeMode == Mode.Analyze ) {
+                    if( tooMuchEP && EP != 0 ) {
+                        Console.WriteLine( $"\t!!! { Name } - Taking last week's EP value of { EP }, decaying it, then adding the max possible EP of { BWL_ONY_EP + MOLTEN_CORE_EP } for attending all raids this player should not have been able to go over { potentialNextEP }.  The following week shows them at { next.EP } which is { next.EP - potentialNextEP } too high." );
+                    }
+
+                    if( !doubleDecay && tooLittleGP && next.GP != BASE_GP ) {
+                        Console.WriteLine( $"\t!!! { Name } - Taking last week's GP value of { GP } and decaying it they should be at { decayedGP } if they did not receive any new loot.  The following week they were at { next.GP } which is { decayedGP - next.GP } lower than it should be." );
+                    }
+
+                    if( doubleDecay ) {
+                        Console.WriteLine( $"\t!!! { Name } - Taking last week's GP value of { GP } and decaying it they should be at { decayedGP } if they did not receive any new loot.  The following week they were at { next.GP } which is { decayedGP - next.GP } lower than it should be.  The value of their decayed GP matches what it would have been if we decayed it twice." );
+                    }
+                }
+                else {
+                    Console.WriteLine( $"\t{ Name } - Missed Raid: { missedRaid } - Got Loot: { gotLoot } - Too Much EP: { tooMuchEP } (Expected { potentialNextEP }, Got { next.EP }) - Too Little GP: { tooLittleGP } (Expected {decayedGP} (Double Decay: {decayedGP2}), Got {next.GP}) - Before: {EP}/{GP} - Decayed: {decayedEP}/{decayedGP} - After: {next.EP}/{next.GP}" );
                 }
             }
         }
