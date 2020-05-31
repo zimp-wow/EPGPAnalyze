@@ -160,10 +160,12 @@ namespace EPGPAnalyze
                 }
 
                 int decayedEP = decay( EP );
+                int decayedEP2 = decay( decayedEP );
                 int decayedGP = decay( GP, 0.1f, BASE_GP );
-                int decayedGP2 = decay( decayedGP, .1f, BASE_GP );
+                int decayedGP2 = decay( decayedGP, .1f, 0 );
 
                 int potentialNextEP = decayedEP + BWL_ONY_EP + MOLTEN_CORE_EP;
+                int potentialNextEP2 = decayedEP2 + BWL_ONY_EP + MOLTEN_CORE_EP;
                 bool missedRaid = false;
                 bool tooMuchEP = false;
                 if( next.EP < potentialNextEP ) {
@@ -212,7 +214,7 @@ namespace EPGPAnalyze
                     }
                 }
                 if( _activeMode == Mode.Report || _activeMode == Mode.Both ) {
-                    Console.WriteLine( $"\t{ Name } - Missed Raid: { missedRaid } - Got Loot: { gotLoot } - Too Much EP: { tooMuchEP } (Expected { potentialNextEP }, Got { next.EP }) - Too Little GP: { tooLittleGP } (Expected {decayedGP} (Double Decay: {decayedGP2}), Got {next.GP}) - Before: {EP}/{GP} - Decayed: {decayedEP}/{decayedGP} - After: {next.EP}/{next.GP}" );
+                    Console.WriteLine( $"\t{ Name } - Missed Raid: { missedRaid } - Got Loot: { gotLoot } - Too Much EP: { tooMuchEP } (Expected { potentialNextEP } (Double Decay: {potentialNextEP2}), Got { next.EP }) - Too Little GP: { tooLittleGP } (Expected {decayedGP} (Double Decay: {decayedGP2}), Got {next.GP}) - Before: {EP}/{GP} - Decayed: {decayedEP}/{decayedGP} - After: {next.EP}/{next.GP}" );
                 }
             }
         }
