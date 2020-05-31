@@ -17,14 +17,30 @@ namespace EPGPAnalyze
 
         private static Dictionary<string, Entry> _entries = new Dictionary<string, Entry>();
         private static Mode _activeMode = Mode.Analyze;
+        private static string _playerFilter = null;
 
         private enum Mode {
             Analyze = 0,
-            Report = 1
+            Report  = 1,
+            Both    = 2
         }
 
         static async Task Main(string[] args)
         {
+            if( args.Length > 0 ) {
+                try {
+                    _activeMode = (Mode)Enum.Parse( typeof( Mode ), args[0] );
+                }
+                catch( Exception e ) {
+                    Console.WriteLine( "Invalid first argument, expected either 'Analyze' or 'Report' or 'Both'" );
+                    return;
+                }
+            }
+
+            if( args.Length > 1 ) {
+                _playerFilter = args[1];
+            }
+
             SortedSet<string> sorted = new SortedSet<string>( new SortFiles() );
 
             string[] files = Directory.GetFiles( ".", "*CCEPGP*" );
@@ -56,7 +72,7 @@ namespace EPGPAnalyze
                         _entries[ entry.Name ] = entry;
                     }
                     catch( Exception e ) {
-                        Console.WriteLine( "Failed to parse line: " + line );
+                        Console.WriteLine( "Failed to parse line: " + line + " - " + e );
                     }
                 }
             }
@@ -86,15 +102,52 @@ namespace EPGPAnalyze
 
             public Entry( string line ) {
                 string[] comps = line.Split( ',' );
-                if( line.Length < 6 ) {
+                if( line.Length < 3 ) {
                     throw new Exception( "Unexpected number of fields" );
                 }
 
-                Name  = comps[0];
+                Name  = string.Empty;
+                // Stripping any non-ascii characters from the name, thanks Auslander
+                foreach( char c in comps[0].ToCharArray() ) {
+                    if( c <= sbyte.MaxValue ) {
+                        Name += c;
+                    }
+                }
+
                 Class = comps[1];
                 Role  = comps[2];
-                EP    = int.Parse( comps[3] );
-                GP    = int.Parse( comps[4] );
+                EP = 0;
+                GP = BASE_GP;
+                PR = 0.0f;
+
+                if( comps.Length < 4 ) {
+                    return;
+                }
+
+                if( string.IsNullOrWhiteSpace( comps[3] ) ) {
+                    comps[3] = "0";
+                }
+
+                EP = int.Parse( comps[3] );
+
+                if( comps.Length < 5 ) {
+                    return;
+                }
+
+                if( string.IsNullOrWhiteSpace( comps[4] ) ) {
+                    comps[4] = $"{ BASE_GP }";
+                }
+
+                GP = int.Parse( comps[4] );
+
+                if( comps.Length < 6 ) {
+                    return;
+                }
+
+                if( string.IsNullOrWhiteSpace( comps[5] ) ) {
+                    comps[5] = "0";
+                }
+
                 PR    = double.Parse( comps[5] );
             }
 
@@ -141,12 +194,16 @@ namespace EPGPAnalyze
                     doubleDecay = true;
                 }
 
-                if( _activeMode == Mode.Analyze ) {
+                if( _playerFilter != null && !Name.StartsWith( _playerFilter ) ) {
+                    return;
+                }
+
+                if( _activeMode == Mode.Analyze || _activeMode == Mode.Both ) {
                     if( tooMuchEP && EP != 0 ) {
                         Console.WriteLine( $"\t!!! { Name } - Taking last week's EP value of { EP }, decaying it, then adding the max possible EP of { BWL_ONY_EP + MOLTEN_CORE_EP } for attending all raids this player should not have been able to go over { potentialNextEP }.  The following week shows them at { next.EP } which is { next.EP - potentialNextEP } too high." );
                     }
 
-                    if( !doubleDecay && tooLittleGP && next.GP != BASE_GP ) {
+                    if( !doubleDecay && tooLittleGP && next.GP != BASE_GP && next.GP != 0 ) {
                         Console.WriteLine( $"\t!!! { Name } - Taking last week's GP value of { GP } and decaying it they should be at { decayedGP } if they did not receive any new loot.  The following week they were at { next.GP } which is { decayedGP - next.GP } lower than it should be." );
                     }
 
@@ -154,7 +211,7 @@ namespace EPGPAnalyze
                         Console.WriteLine( $"\t!!! { Name } - Taking last week's GP value of { GP } and decaying it they should be at { decayedGP } if they did not receive any new loot.  The following week they were at { next.GP } which is { decayedGP - next.GP } lower than it should be.  The value of their decayed GP matches what it would have been if we decayed it twice." );
                     }
                 }
-                else {
+                if( _activeMode == Mode.Report || _activeMode == Mode.Both ) {
                     Console.WriteLine( $"\t{ Name } - Missed Raid: { missedRaid } - Got Loot: { gotLoot } - Too Much EP: { tooMuchEP } (Expected { potentialNextEP }, Got { next.EP }) - Too Little GP: { tooLittleGP } (Expected {decayedGP} (Double Decay: {decayedGP2}), Got {next.GP}) - Before: {EP}/{GP} - Decayed: {decayedEP}/{decayedGP} - After: {next.EP}/{next.GP}" );
                 }
             }
