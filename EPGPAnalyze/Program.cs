@@ -18,6 +18,7 @@ namespace EPGPAnalyze
         private static Dictionary<string, Entry> _entries = new Dictionary<string, Entry>();
         private static Mode _activeMode = Mode.Analyze;
         private static string _playerFilter = null;
+        private static TrafficLogs _traffic = new TrafficLogs();
 
         private enum Mode {
             Analyze = 0,
@@ -41,9 +42,11 @@ namespace EPGPAnalyze
                 _playerFilter = args[1];
             }
 
+            await _traffic.ParseLogs( "CEPGP.lua" );
+
             SortedSet<string> sorted = new SortedSet<string>( new SortFiles() );
 
-            string[] files = Directory.GetFiles( ".", "*CCEPGP*" );
+            string[] files = Directory.GetFiles( ".", "*CCEPGP20*" );
             foreach( string file in files ) {
                 sorted.Add( file );
             }
@@ -56,13 +59,19 @@ namespace EPGPAnalyze
         }
 
         private static async Task ProcessFile( string file ) {
-            Console.WriteLine( "\nProcessing File: " + file + "\n" );
+            
+            int year  = int.Parse( file.Substring( 8, 4 ) );
+            int month = int.Parse( file.Substring( 12, 2 ) );
+            int day   = int.Parse( file.Substring( 14, 2 ) );
+            DateTime logDate = new DateTime( year, month, day );
+
+            Console.WriteLine( "\nProcessing File: " + file + $" - { logDate }\n" );
             using( StreamReader sr = new StreamReader( file ) ) {
                 while( !sr.EndOfStream ) {
                     string line  = await sr.ReadLineAsync();
 
                     try {
-                        Entry entry = new Entry( line );
+                        Entry entry = new Entry( line, logDate );
                         if( _entries.ContainsKey( entry.Name ) ) {
                             Entry existing = _entries[ entry.Name ];
 
@@ -93,14 +102,17 @@ namespace EPGPAnalyze
         }
 
         private class Entry {
-            public string Name  { get; set; }
-            public string Class { get; set; }
-            public string Role  { get; set; }
-            public int    EP    { get; set; }
-            public int    GP    { get; set; }
-            public double PR    { get; set; }
+            public DateTime LogDate { get; set; }
+            public string   Name    { get; set; }
+            public string   Class   { get; set; }
+            public string   Role    { get; set; }
+            public int      EP      { get; set; }
+            public int      GP      { get; set; }
+            public double   PR      { get; set; }
 
-            public Entry( string line ) {
+            public Entry( string line, DateTime logDate ) {
+                LogDate = logDate;
+
                 string[] comps = line.Split( ',' );
                 if( line.Length < 3 ) {
                     throw new Exception( "Unexpected number of fields" );
@@ -148,10 +160,14 @@ namespace EPGPAnalyze
                     comps[5] = "0";
                 }
 
-                PR    = double.Parse( comps[5] );
+                PR = double.Parse( comps[5] );
             }
 
             public void Analyze( Entry next ) {
+                if( _playerFilter != null && !Name.StartsWith( _playerFilter ) ) {
+                    return;
+                }
+
                 int decay( int value, float percent = 0.1f, int baseVal = 0 ) {
                     if( baseVal > 0 ) {
                         return (int)Math.Max(Math.Floor( ( value - baseVal ) * ( 1.0f - percent ) + baseVal ), baseVal );
@@ -163,6 +179,21 @@ namespace EPGPAnalyze
                 int decayedEP2 = decay( decayedEP );
                 int decayedGP = decay( GP, 0.1f, BASE_GP );
                 int decayedGP2 = decay( decayedGP, .1f, 0 );
+
+                int gpFromTraffic = 0;
+                List<TrafficLogs.LogEntry> traffic = _traffic.GetTrafficForPlayer( Name );
+                foreach( var entry in traffic ) {
+                    if( entry.GPBefore == entry.GPAfter ) {
+                        continue;
+                    }
+
+                    if( entry.Timestamp > LogDate && entry.Timestamp < next.LogDate ) {
+                        if( _activeMode == Mode.Report || _activeMode == Mode.Both ) {
+                            Console.WriteLine( $"\t{ Name } GP Changed [{ entry.Message } - { entry.ItemName }] GP Before { entry.GPBefore }, GP After { entry.GPAfter }" );
+                        }
+                        gpFromTraffic = entry.GPAfter;
+                    }
+                }
 
                 int potentialNextEP = decayedEP + BWL_ONY_EP + MOLTEN_CORE_EP;
                 int potentialNextEP2 = decayedEP2 + BWL_ONY_EP + MOLTEN_CORE_EP;
@@ -181,6 +212,7 @@ namespace EPGPAnalyze
 
                 bool gotLoot = false;
                 bool tooLittleGP = false;
+                bool tooLittleAfterLoot = false;
                 bool doubleDecay = false;
                 if( next.GP > decayedGP ) {
                     if( next.GP - decayedGP > 1 ) {
@@ -192,12 +224,11 @@ namespace EPGPAnalyze
                         tooLittleGP = true;
                     }
                 }
+                if( next.GP < gpFromTraffic ) {
+                    tooLittleAfterLoot = true;
+                }
                 if( next.GP == decayedGP2 && next.GP != BASE_GP ) {
                     doubleDecay = true;
-                }
-
-                if( _playerFilter != null && !Name.StartsWith( _playerFilter ) ) {
-                    return;
                 }
 
                 if( _activeMode == Mode.Analyze || _activeMode == Mode.Both ) {
@@ -207,6 +238,10 @@ namespace EPGPAnalyze
 
                     if( !doubleDecay && tooLittleGP && next.GP != BASE_GP && next.GP != 0 ) {
                         Console.WriteLine( $"\t!!! { Name } - Taking last week's GP value of { GP } and decaying it they should be at { decayedGP } if they did not receive any new loot.  The following week they were at { next.GP } which is { decayedGP - next.GP } lower than it should be." );
+                    }
+                    
+                    if( tooLittleAfterLoot ) {
+                        Console.WriteLine( $"\t!!! { Name } - Taking the last value from logs they should be at { gpFromTraffic }.  The following week they were at { next.GP } which is { gpFromTraffic - next.GP } lower than it should be." );
                     }
 
                     if( doubleDecay ) {
