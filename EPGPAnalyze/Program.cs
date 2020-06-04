@@ -46,7 +46,7 @@ namespace EPGPAnalyze
 
             SortedSet<string> sorted = new SortedSet<string>( new SortFiles() );
 
-            string[] files = Directory.GetFiles( ".", "*CCEPGP20*" );
+            string[] files = Directory.GetFiles( ".", "CCEPGP20*" );
             foreach( string file in files ) {
                 sorted.Add( file );
             }
@@ -181,6 +181,7 @@ namespace EPGPAnalyze
                 int decayedGP2 = decay( decayedGP, .1f, 0 );
 
                 int gpFromTraffic = 0;
+                bool firstItem = true;
                 List<TrafficLogs.LogEntry> traffic = _traffic.GetTrafficForPlayer( Name );
                 foreach( var entry in traffic ) {
                     if( entry.GPBefore == entry.GPAfter ) {
@@ -188,9 +189,18 @@ namespace EPGPAnalyze
                     }
 
                     if( entry.Timestamp > LogDate && entry.Timestamp < next.LogDate ) {
+                        if( firstItem ) {
+                            firstItem = false;
+                            int diff = Math.Abs( decayedGP - entry.GPBefore );
+                            if( diff > 1  && ( _activeMode == Mode.Analyze || _activeMode == Mode.Both ) ) {
+                                Console.WriteLine( $"\t!!! { Name } - Taking last week's GP of { GP } and decaying it they should have had { decayedGP } when they got their first item this week.  Instead they were at { entry.GPBefore } which is { decayedGP - entry.GPBefore } lower than it should be." );
+                            }
+                        }
+
                         if( _activeMode == Mode.Report || _activeMode == Mode.Both ) {
                             Console.WriteLine( $"\t{ Name } GP Changed [{ entry.Message } - { entry.ItemName }] GP Before { entry.GPBefore }, GP After { entry.GPAfter }" );
                         }
+
                         gpFromTraffic = entry.GPAfter;
                     }
                 }
@@ -239,7 +249,7 @@ namespace EPGPAnalyze
                     if( !doubleDecay && tooLittleGP && next.GP != BASE_GP && next.GP != 0 ) {
                         Console.WriteLine( $"\t!!! { Name } - Taking last week's GP value of { GP } and decaying it they should be at { decayedGP } if they did not receive any new loot.  The following week they were at { next.GP } which is { decayedGP - next.GP } lower than it should be." );
                     }
-                    
+
                     if( tooLittleAfterLoot ) {
                         Console.WriteLine( $"\t!!! { Name } - Taking the last value from logs they should be at { gpFromTraffic }.  The following week they were at { next.GP } which is { gpFromTraffic - next.GP } lower than it should be." );
                     }
