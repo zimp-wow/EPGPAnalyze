@@ -168,17 +168,17 @@ namespace EPGPAnalyze
                     return;
                 }
 
-                int decay( int value, float percent = 0.1f, int baseVal = 0 ) {
+                int decay( int value, double percent = 0.1, int baseVal = 0 ) {
                     if( baseVal > 0 ) {
-                        return (int)Math.Max(Math.Floor( ( value - baseVal ) * ( 1.0f - percent ) + baseVal ), baseVal );
+                        return (int)Math.Max(Math.Floor( ( value - baseVal ) * ( 1.0 - percent ) + baseVal ), baseVal );
                     }
-                    return (int)Math.Max(Math.Floor(value * ( 1.0f - percent ) ), 0 );
+                    return (int)Math.Max(Math.Floor(value * ( 1.0 - percent ) ), 0 );
                 }
 
                 int decayedEP = decay( EP );
                 int decayedEP2 = decay( decayedEP );
-                int decayedGP = decay( GP, 0.1f, BASE_GP );
-                int decayedGP2 = decay( decayedGP, .1f, 0 );
+                int decayedGP = decay( GP, 0.1, BASE_GP );
+                int decayedGP2 = decay( decayedGP, .1, 0 );
 
                 int gpFromTraffic = 0;
                 bool firstItem = true;
@@ -210,14 +210,10 @@ namespace EPGPAnalyze
                 bool missedRaid = false;
                 bool tooMuchEP = false;
                 if( next.EP < potentialNextEP ) {
-                    if( potentialNextEP - next.EP > 1 ) {
-                        missedRaid = true;
-                    }
+                    missedRaid = true;
                 }
                 if( next.EP > potentialNextEP ) {
-                    if( next.EP - potentialNextEP > 1 ) {
-                        tooMuchEP = true;
-                    }
+                    tooMuchEP = true;
                 }
 
                 bool gotLoot = false;
@@ -225,14 +221,10 @@ namespace EPGPAnalyze
                 bool tooLittleAfterLoot = false;
                 bool doubleDecay = false;
                 if( next.GP > decayedGP ) {
-                    if( next.GP - decayedGP > 1 ) {
-                        gotLoot = true;
-                    }
+                    gotLoot = true;
                 }
                 if( next.GP < decayedGP ) {
-                    if( decayedGP - next.GP > 1 ) {
-                        tooLittleGP = true;
-                    }
+                    tooLittleGP = true;
                 }
                 if( next.GP < gpFromTraffic ) {
                     tooLittleAfterLoot = true;
