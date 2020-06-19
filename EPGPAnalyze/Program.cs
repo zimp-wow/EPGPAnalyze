@@ -15,6 +15,8 @@ namespace EPGPAnalyze
         const int BWL_ONY_EP     = 169;
         const int BASE_GP        = 50;
 
+        private static int EPModifier = 0;
+
         private static Dictionary<string, Entry> _entries = new Dictionary<string, Entry>();
         private static Mode _activeMode = Mode.Analyze;
         private static string _playerFilter = null;
@@ -39,7 +41,14 @@ namespace EPGPAnalyze
             }
 
             if( args.Length > 1 ) {
-                _playerFilter = args[1];
+                if( args[1] != "*" ) {
+                    _playerFilter = args[1];
+                }
+            }
+
+            if( args.Length > 2 ) {
+                EPModifier = int.Parse( args[2] );
+                Console.WriteLine( "Using max EP modifier of: " + EPModifier );
             }
 
             await _traffic.ParseLogs( "CEPGP.lua" );
@@ -205,8 +214,8 @@ namespace EPGPAnalyze
                     }
                 }
 
-                int potentialNextEP = decayedEP + BWL_ONY_EP + MOLTEN_CORE_EP;
-                int potentialNextEP2 = decayedEP2 + BWL_ONY_EP + MOLTEN_CORE_EP;
+                int potentialNextEP = decayedEP + BWL_ONY_EP + MOLTEN_CORE_EP + EPModifier;
+                int potentialNextEP2 = decayedEP2 + BWL_ONY_EP + MOLTEN_CORE_EP + EPModifier;
                 bool missedRaid = false;
                 bool tooMuchEP = false;
                 if( next.EP < potentialNextEP ) {
