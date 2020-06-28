@@ -203,6 +203,7 @@ namespace EPGPAnalyze
 				int gpFromTraffic = 0;
 				bool firstItem = true;
 				List<TrafficLogs.LogEntry> traffic = _traffic.GetTrafficForPlayer( Name );
+				TrafficLogs.LogEntry lastItem = null;
 				foreach( var entry in traffic ) {
 					if( entry.GPBefore == entry.GPAfter ) {
 						continue;
@@ -217,11 +218,16 @@ namespace EPGPAnalyze
 							}
 						}
 
+						if( ( _activeMode == Mode.Analyze || _activeMode == Mode.Both ) && lastItem != null && lastItem.GPAfter != entry.GPBefore ) {
+							Console.WriteLine( $"\t!!! { Name } - The GP recorded after the previous item does not match the GP recorded before this item was awarded.  Expected { lastItem.GPAfter } - Got { entry.GPBefore }" );
+						}
+
 						if( _activeMode == Mode.Report || _activeMode == Mode.Both ) {
 							Console.WriteLine( $"\t{ Name } GP Changed [{ entry.Message } - { entry.ItemName }] GP Before { entry.GPBefore }, GP After { entry.GPAfter }" );
 						}
 
 						gpFromTraffic = entry.GPAfter;
+						lastItem = entry;
 					}
 				}
 
