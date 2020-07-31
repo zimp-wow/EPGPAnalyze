@@ -223,7 +223,7 @@ namespace EPGPAnalyze
 						}
 
 						if( _activeMode == Mode.Report || _activeMode == Mode.Both ) {
-							Console.WriteLine( $"\t{ Name } GP Changed [{ entry.Message } - { entry.ItemName }] GP Before { entry.GPBefore }, GP After { entry.GPAfter }" );
+							Console.WriteLine( $"\n\t\t{ Name } GP Changed [{ entry.Message } - { entry.ItemName }] GP Before { entry.GPBefore }, GP After { entry.GPAfter }\n" );
 						}
 
 						gpFromTraffic = entry.GPAfter;
