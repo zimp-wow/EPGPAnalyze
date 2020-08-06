@@ -6,14 +6,17 @@ using System.Management.Instrumentation;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace EPGPAnalyze
 {
 	class Program
 	{
-		const int MOLTEN_CORE_EP = 126;
-		const int BWL_ONY_EP     = 169;
-		const int BASE_GP        = 50;
+		public class Config {
+			public int    WeeklyEPMax  { get; set; } = 0;
+			public int    BaseGP       { get; set; } = 150;
+			public double DecayPercent { get; set; } = 0.1;
+		}
 
 		private static int EPModifier = 0;
 
@@ -21,6 +24,7 @@ namespace EPGPAnalyze
 		private static Mode _activeMode = Mode.Analyze;
 		private static string _playerFilter = null;
 		private static TrafficLogs _traffic = new TrafficLogs();
+		private static Config _config = new Config();
 
 		private enum Mode {
 			Analyze = 0,
@@ -29,8 +33,36 @@ namespace EPGPAnalyze
 			Loot    = 3
 		}
 
+		private const string WelcomeStanza = @"
+This file contains the analysis of EPGP values from last week to the values captured before the decay this week.
+It also compares the values from before the decay to the values after the decay to ensure the decay was performed correctly.
+
+Lines indicating potential issues will start with '!!!'.
+
+Why do we generate this report?
+
+EPGP values are stored in each players officer notes.  This is a similar mechanism to your public note except only people with the right access can change it.  This means they are vulnerable to tampering.
+This report attempts to catch any tampering that might happen so problems can be corrected before they have an impact on loot decisions.  This tool is not able to prove if the tampering was intentional
+or a side-effect of some bug in the addon we use to manage EPGP.
+
+You can find the source for this tool at: https://github.com/zimp-wow/EPGPAnalyze
+
+";
+
 		static async Task Main(string[] args)
 		{
+			if( !File.Exists( "config.json" ) ) {
+				string jsonConfig = JsonConvert.SerializeObject( new Config() );
+				File.WriteAllText( "config.json", jsonConfig );
+				Console.WriteLine( "Generated default config file: 'config.json" );
+			}
+
+			Console.WriteLine( WelcomeStanza );
+
+			string configStr = File.ReadAllText( "config.json" );
+			Console.WriteLine( "Using Config: " + configStr );
+			_config = JsonConvert.DeserializeObject<Config>( configStr );
+
 			if( args.Length > 0 ) {
 				try {
 					_activeMode = (Mode)Enum.Parse( typeof( Mode ), args[0] );
@@ -89,6 +121,11 @@ namespace EPGPAnalyze
 			using( StreamReader sr = new StreamReader( file ) ) {
 				while( !sr.EndOfStream ) {
 					string line  = await sr.ReadLineAsync();
+
+					if( line.StartsWith( "{" ) ) {
+						_config = JsonConvert.DeserializeObject<Config>( line );
+						Console.WriteLine( "Changing config to: " + line + "\n" );
+					}
 
 					try {
 						Entry entry = new Entry( line, logDate );
@@ -149,7 +186,7 @@ namespace EPGPAnalyze
 				Class = comps[1];
 				Role  = comps[2];
 				EP = 0;
-				GP = BASE_GP;
+				GP = _config.BaseGP;
 				PR = 0.0f;
 
 				if( comps.Length < 4 ) {
@@ -167,7 +204,7 @@ namespace EPGPAnalyze
 				}
 
 				if( string.IsNullOrWhiteSpace( comps[4] ) ) {
-					comps[4] = $"{ BASE_GP }";
+					comps[4] = $"{ _config.BaseGP }";
 				}
 
 				GP = int.Parse( comps[4] );
@@ -188,17 +225,17 @@ namespace EPGPAnalyze
 					return;
 				}
 
-				int decay( int value, double percent = 0.1, int baseVal = 0 ) {
+				int decay( int value, double percent, int baseVal = 0 ) {
 					if( baseVal > 0 ) {
 						return (int)Math.Max(Math.Floor( ( value - baseVal ) * ( 1.0 - percent ) + baseVal ), baseVal );
 					}
 					return (int)Math.Max(Math.Floor(value * ( 1.0 - percent ) ), 0 );
 				}
 
-				int decayedEP = decay( EP );
-				int decayedEP2 = decay( decayedEP );
-				int decayedGP = decay( GP, 0.1, BASE_GP );
-				int decayedGP2 = decay( decayedGP, .1, 0 );
+				int decayedEP = decay( EP, _config.DecayPercent );
+				int decayedEP2 = decay( decayedEP, _config.DecayPercent );
+				int decayedGP = decay( GP, _config.DecayPercent, _config.BaseGP );
+				int decayedGP2 = decay( decayedGP, _config.DecayPercent, 0 );
 
 				int gpFromTraffic = 0;
 				bool firstItem = true;
@@ -231,8 +268,8 @@ namespace EPGPAnalyze
 					}
 				}
 
-				int potentialNextEP = decayedEP + BWL_ONY_EP + MOLTEN_CORE_EP + EPModifier;
-				int potentialNextEP2 = decayedEP2 + BWL_ONY_EP + MOLTEN_CORE_EP + EPModifier;
+				int potentialNextEP = decayedEP + _config.WeeklyEPMax + EPModifier;
+				int potentialNextEP2 = decayedEP2 + _config.WeeklyEPMax + EPModifier;
 				bool missedRaid = false;
 				bool tooMuchEP = false;
 				if( next.EP < potentialNextEP ) {
@@ -255,16 +292,16 @@ namespace EPGPAnalyze
 				if( next.GP < gpFromTraffic ) {
 					tooLittleAfterLoot = true;
 				}
-				if( next.GP == decayedGP2 && next.GP != BASE_GP ) {
+				if( next.GP == decayedGP2 && next.GP != _config.BaseGP ) {
 					doubleDecay = true;
 				}
 
 				if( _activeMode == Mode.Analyze || _activeMode == Mode.Both ) {
 					if( tooMuchEP && EP != 0 ) {
-						Console.WriteLine( $"\t!!! { Name } - Taking last week's EP value of { EP }, decaying it, then adding the max possible EP of { BWL_ONY_EP + MOLTEN_CORE_EP } for attending all raids this player should not have been able to go over { potentialNextEP }.  The following week shows them at { next.EP } which is { next.EP - potentialNextEP } too high." );
+						Console.WriteLine( $"\t!!! { Name } - Taking last week's EP value of { EP }, decaying it, then adding the max possible EP of { _config.WeeklyEPMax } for attending all raids this player should not have been able to go over { potentialNextEP }.  The following week shows them at { next.EP } which is { next.EP - potentialNextEP } too high." );
 					}
 
-					if( !doubleDecay && tooLittleGP && next.GP != BASE_GP && next.GP != 0 ) {
+					if( !doubleDecay && tooLittleGP && next.GP != _config.BaseGP && next.GP != 0 ) {
 						Console.WriteLine( $"\t!!! { Name } - Taking last week's GP value of { GP } and decaying it they should be at { decayedGP } if they did not receive any new loot.  The following week they were at { next.GP } which is { decayedGP - next.GP } lower than it should be." );
 					}
 
