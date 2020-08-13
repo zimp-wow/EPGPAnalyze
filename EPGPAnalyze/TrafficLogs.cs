@@ -64,6 +64,8 @@ namespace EPGPAnalyze
 		private static Regex ItemValRegex = new Regex( "^\\s*\".*Hitem:([0-9]+).*?\\[(.*?)\\].*", RegexOptions.Compiled );
 		private static Regex TimestampValRegex = new Regex( ".*?([0-9][0-9]+)", RegexOptions.Compiled );
 
+		private const bool DEBUG = false;
+
 		public class LogEntry {
 			public string   Target    { get; set; }
 			public string   Giver     { get; set; }
@@ -79,40 +81,64 @@ namespace EPGPAnalyze
 			public LogEntry() {
 			}
 
+			private async Task<string> ReadLine( StreamReader sr ) {
+				string line = await sr.ReadLineAsync();
+				if( DEBUG ) {
+					Console.WriteLine( line );
+				}
+
+				return line;
+			}
+
 			public async Task<bool> ReadData( StreamReader sr ) {
-				string firstLine = await sr.ReadLineAsync(); //Opening Bracket
+				string firstLine = await ReadLine( sr ); //Opening Bracket
 				if( firstLine.Contains( "}" ) ) {
 					return false;
 				}
 
-				Target  = StringValRegex.Match( await sr.ReadLineAsync() ).Groups[1].Value;
-				Giver   = StringValRegex.Match( await sr.ReadLineAsync() ).Groups[1].Value;
-				Message = StringValRegex.Match( await sr.ReadLineAsync() ).Groups[1].Value;
+				Target  = StringValRegex.Match( await ReadLine( sr ) ).Groups[1].Value;
+				Giver   = StringValRegex.Match( await ReadLine( sr ) ).Groups[1].Value;
+				Message = StringValRegex.Match( await ReadLine( sr ) ).Groups[1].Value;
 				EPBefore = await GetInt( sr );
 				EPAfter = await GetInt( sr );
 				GPBefore = await GetInt( sr );
 				GPAfter = await GetInt( sr );
 
-				string itemLine = await sr.ReadLineAsync();
+				string itemLine = await ReadLine( sr );
 				string timestampLine = itemLine;
 				Match itemMatch = ItemValRegex.Match( itemLine );
 				if( itemMatch.Success ) {
 					ItemID = int.Parse( itemMatch.Groups[1].Value );
 					ItemName = itemMatch.Groups[2].Value;
-					timestampLine = await sr.ReadLineAsync();
+					timestampLine = await ReadLine( sr );
 				}
 
-				Match timestampMatch = TimestampValRegex.Match( timestampLine );
-				try {
-					int secondsSince = int.Parse( timestampMatch.Groups[1].Value );
-					Timestamp = DateTimeOffset.FromUnixTimeSeconds( secondsSince ).DateTime;
-				}
-				catch( Exception ) {
-					Console.WriteLine( "Offending Line: " + timestampLine );
-					throw;
+				bool TryTimestamp() {
+					Match timestampMatch = TimestampValRegex.Match( timestampLine );
+					try {
+						int secondsSince = int.Parse( timestampMatch.Groups[1].Value );
+						Timestamp = DateTimeOffset.FromUnixTimeSeconds( secondsSince ).DateTime;
+						return true;
+					}
+					catch( Exception ) {
+						return false;
+					}
 				}
 
-				await sr.ReadLineAsync(); //Closing Bracket
+				if( TryTimestamp() == false ) {
+					timestampLine = await ReadLine( sr );
+					if( TryTimestamp() == false ) {
+						throw new Exception( "Failed to get timestamp" );
+					}
+				}
+
+
+				while( true ) {
+					string bracket = await ReadLine( sr ); //Closing Bracket
+					if( bracket.Trim().StartsWith( "}" ) ) {
+						break;
+					}
+				}
 
 				//Console.WriteLine( $"{ Target } - { Message } - { GPBefore } - { GPAfter } - { ItemName }" );
 
@@ -120,7 +146,7 @@ namespace EPGPAnalyze
 			}
 
 			private async Task<int> GetInt( StreamReader sr ) {
-				string line = await sr.ReadLineAsync();
+				string line = await ReadLine( sr );
 				try {
 					Match m = StringValRegex.Match( line );
 					if( string.IsNullOrWhiteSpace( m.Groups[1].Value ) ) {
