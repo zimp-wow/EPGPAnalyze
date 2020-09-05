@@ -117,7 +117,7 @@ namespace EPGPAnalyze
 					Match timestampMatch = TimestampValRegex.Match( timestampLine );
 					try {
 						int secondsSince = int.Parse( timestampMatch.Groups[1].Value );
-						Timestamp = DateTimeOffset.FromUnixTimeSeconds( secondsSince ).DateTime;
+						Timestamp = DateTimeOffset.FromUnixTimeSeconds( secondsSince ).DateTime - TimeSpan.FromHours( 5 ); //Convert to central time
 						return true;
 					}
 					catch( Exception ) {
