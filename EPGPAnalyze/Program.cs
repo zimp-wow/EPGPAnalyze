@@ -125,6 +125,7 @@ You can find the source for this tool at: https://github.com/zimp-wow/EPGPAnalyz
 					if( line.StartsWith( "{" ) ) {
 						_config = JsonConvert.DeserializeObject<Config>( line );
 						Console.WriteLine( "Changing config to: " + line + "\n" );
+						continue;
 					}
 
 					try {
