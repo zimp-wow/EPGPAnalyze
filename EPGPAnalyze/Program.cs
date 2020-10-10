@@ -103,14 +103,16 @@ You can find the source for this tool at: https://github.com/zimp-wow/EPGPAnalyz
 				sorted.Add( file );
 			}
 
+			bool firstFile = true;
 			foreach( string file in sorted ) {
-				await ProcessFile( file );
+				await ProcessFile( file, firstFile );
+				firstFile = false;
 			}
 
 			Console.ReadLine();
 		}
 
-		private static async Task ProcessFile( string file ) {
+		private static async Task ProcessFile( string file, bool firstFile ) {
 			
 			int year  = int.Parse( file.Substring( 8, 4 ) );
 			int month = int.Parse( file.Substring( 12, 2 ) );
@@ -134,6 +136,15 @@ You can find the source for this tool at: https://github.com/zimp-wow/EPGPAnalyz
 							Entry existing = _entries[ entry.Name ];
 
 							existing.Analyze( entry );
+						}
+						else if( !firstFile ) {
+							//If the member didn't exist in the base snapshot lets create a fake 0 EP entry for them so we can still compare
+							Entry newMember = new Entry( entry );
+							newMember.EP = 0;
+							newMember.PR = 0;
+							newMember.LogDate = newMember.LogDate - TimeSpan.FromDays( 7 );
+
+							newMember.Analyze( entry );
 						}
 
 						_entries[ entry.Name ] = entry;
@@ -167,6 +178,16 @@ You can find the source for this tool at: https://github.com/zimp-wow/EPGPAnalyz
 			public int      EP      { get; set; }
 			public int      GP      { get; set; }
 			public double   PR      { get; set; }
+
+			public Entry( Entry entry ) {
+				this.LogDate = entry.LogDate;
+				this.Name = entry.Name;
+				this.Class = entry.Class;
+				this.Role = entry.Role;
+				this.EP = entry.EP;
+				this.GP = entry.GP;
+				this.PR = entry.PR;
+			}
 
 			public Entry( string line, DateTime logDate ) {
 				LogDate = logDate;
@@ -298,7 +319,7 @@ You can find the source for this tool at: https://github.com/zimp-wow/EPGPAnalyz
 				}
 
 				if( _activeMode == Mode.Analyze || _activeMode == Mode.Both ) {
-					if( tooMuchEP && EP != 0 ) {
+					if( tooMuchEP && next.EP != 0 ) {
 						Console.WriteLine( $"\t!!! { Name } - Taking last week's EP value of { EP }, decaying it, then adding the max possible EP of { _config.WeeklyEPMax } for attending all raids this player should not have been able to go over { potentialNextEP }.  The following week shows them at { next.EP } which is { next.EP - potentialNextEP } too high." );
 					}
 
