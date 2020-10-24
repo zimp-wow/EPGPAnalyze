@@ -142,6 +142,7 @@ You can find the source for this tool at: https://github.com/zimp-wow/EPGPAnalyz
 							Entry newMember = new Entry( entry );
 							newMember.EP = 0;
 							newMember.PR = 0;
+							newMember.GP = _config.BaseGP;
 							newMember.LogDate = newMember.LogDate - TimeSpan.FromDays( 7 );
 
 							newMember.Analyze( entry );
